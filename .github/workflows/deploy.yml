@@ -1,132 +1,132 @@
-﻿name: Build & Deploy
+﻿#name: Build & Deploy
 
-on:
+#on:
 #  push:
 #    branches:
 #      - main
 #  workflow_dispatch:
 
-env:
-  AWS_REGION: eu-central-1
-  ECR_REPOSITORY: destination/api
-  ECS_SERVICE: destination-api-service
-  ECS_CLUSTER: destination-cluster
-  ECS_TASK_FAMILY: destination-api
-  CONTAINER_NAME: api
-
-jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
-
-      - name: Cache NuGet
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --no-restore -c Release
-
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Configure AWS credentials
-        # Prefer OIDC with a role; otherwise use access keys.
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push image to Amazon ECR
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build \
-            -f src/Destination.Api/Dockerfile \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Fetch current Task Definition from AWS
-        env:
-          FAMILY: ${{ env.ECS_TASK_FAMILY }}
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "$FAMILY" \
-            --query 'taskDefinition' > task-def-latest.json
-
-          jq 'del(.taskDefinitionArn,
-                  .revision,
-                  .status,
-                  .requiresAttributes,
-                  .compatibilities,
-                  .registeredAt,
-                  .registeredBy)' task-def-latest.json > task-def-stripped.json
-
-      - name: Inject new image into container definition
-        id: render-td
-        env:
-          CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
-          NEW_IMAGE: ${{ steps.build-image.outputs.image }}
-        run: |
-          jq --arg name "$CONTAINER_NAME" --arg image "$NEW_IMAGE" '
-            .containerDefinitions |=
-              (map(if .name == $name then .image = $image else . end))
-          ' task-def-stripped.json > task-def-updated.json
-
-          jq '.containerDefinitions[] | {name, image}' task-def-updated.json
-
-      - name: Register new Task Definition revision
-        id: register-td
-        run: |
-          NEW_TD_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://task-def-updated.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          echo "task_definition_arn=$NEW_TD_ARN" >> $GITHUB_OUTPUT
-
-      - name: Deploy new revision to ECS service
-        env:
-          CLUSTER: ${{ env.ECS_CLUSTER }}
-          SERVICE: ${{ env.ECS_SERVICE }}
-          TD_ARN: ${{ steps.register-td.outputs.task_definition_arn }}
-        run: |
-          aws ecs update-service \
-            --cluster "$CLUSTER" \
-            --service "$SERVICE" \
-            --task-definition "$TD_ARN"
+#env:
+#  AWS_REGION: eu-central-1
+#  ECR_REPOSITORY: destination/api
+#  ECS_SERVICE: destination-api-service
+#  ECS_CLUSTER: destination-cluster
+#  ECS_TASK_FAMILY: destination-api
+#  CONTAINER_NAME: api
+#
+#jobs:
+#  build:
+#    name: Build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v5
+#
+#      - name: Setup .NET
+#        uses: actions/setup-dotnet@v4
+#        with:
+#          dotnet-version: 9.0.x
+#
+#      - name: Cache NuGet
+#        uses: actions/cache@v4
+#        with:
+#          path: ~/.nuget/packages
+#          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+#          restore-keys: |
+#            nuget-${{ runner.os }}-
+#
+#      - name: Restore
+#        run: dotnet restore
+#
+#      - name: Build
+#        run: dotnet build --no-restore -c Release
+#
+#  deploy:
+#    name: Deploy
+#    runs-on: ubuntu-latest
+#    needs: build
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v5
+#
+#      - name: Configure AWS credentials
+#        # Prefer OIDC with a role; otherwise use access keys.
+#        uses: aws-actions/configure-aws-credentials@v4
+#        with:
+#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#          aws-region: ${{ env.AWS_REGION }}
+#
+#      - name: Login to Amazon ECR
+#        id: login-ecr
+#        uses: aws-actions/amazon-ecr-login@v2
+#
+#      - name: Build, tag, and push image to Amazon ECR
+#        id: build-image
+#        env:
+#          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#          IMAGE_TAG: ${{ github.sha }}
+#        run: |
+#          docker build \
+#            -f src/Destination.Api/Dockerfile \
+#            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+#            .
+#          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+#
+#          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+#
+#      - name: Install jq
+#        run: sudo apt-get update && sudo apt-get install -y jq
+#
+#      - name: Fetch current Task Definition from AWS
+#        env:
+#          FAMILY: ${{ env.ECS_TASK_FAMILY }}
+#        run: |
+#          aws ecs describe-task-definition \
+#            --task-definition "$FAMILY" \
+#            --query 'taskDefinition' > task-def-latest.json
+#
+#          jq 'del(.taskDefinitionArn,
+#                  .revision,
+#                  .status,
+#                  .requiresAttributes,
+#                  .compatibilities,
+#                  .registeredAt,
+#                  .registeredBy)' task-def-latest.json > task-def-stripped.json
+#
+#      - name: Inject new image into container definition
+#        id: render-td
+#        env:
+#          CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
+#          NEW_IMAGE: ${{ steps.build-image.outputs.image }}
+#        run: |
+#          jq --arg name "$CONTAINER_NAME" --arg image "$NEW_IMAGE" '
+#            .containerDefinitions |=
+#              (map(if .name == $name then .image = $image else . end))
+#          ' task-def-stripped.json > task-def-updated.json
+#
+#          jq '.containerDefinitions[] | {name, image}' task-def-updated.json
+#
+#      - name: Register new Task Definition revision
+#        id: register-td
+#        run: |
+#          NEW_TD_ARN=$(aws ecs register-task-definition \
+#            --cli-input-json file://task-def-updated.json \
+#            --query 'taskDefinition.taskDefinitionArn' \
+#            --output text)
+#          echo "task_definition_arn=$NEW_TD_ARN" >> $GITHUB_OUTPUT
+#
+#      - name: Deploy new revision to ECS service
+#        env:
+#          CLUSTER: ${{ env.ECS_CLUSTER }}
+#          SERVICE: ${{ env.ECS_SERVICE }}
+#          TD_ARN: ${{ steps.register-td.outputs.task_definition_arn }}
+#        run: |
+#          aws ecs update-service \
+#            --cluster "$CLUSTER" \
+#            --service "$SERVICE" \
+#            --task-definition "$TD_ARN"
 
 #          aws ecs wait services-stable \
 #            --cluster "$CLUSTER" \

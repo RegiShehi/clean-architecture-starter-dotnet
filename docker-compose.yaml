@@ -1,13 +1,13 @@
 ﻿services:
-  destination-db:
+  clean-architecture-db:
     image: postgres:17.2
-    container_name: destination-db
+    container_name: clean-architecture-db
     environment:
-      - POSTGRES_DB=destination
+      - POSTGRES_DB=clean-architecture
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d destination" ]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d clean-architecture" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -17,24 +17,24 @@
     ports:
       - "5432:5432"
     networks:
-      - destination-network
+      - clean-architecture-network
 
-  destination-api:
-    container_name: destination-api
+  clean-architecture-api:
+    container_name: clean-architecture-api
     build:
       context: .
-      dockerfile: src/Destination.Api/Dockerfile
+      dockerfile: src/CleanArchitecture.Api/Dockerfile
     depends_on:
-      destination-db:
+      clean-architecture-db:
         condition: service_healthy
     networks:
-      - destination-network
+      - clean-architecture-network
 
 volumes:
   pgdata:
-    name: destination-pgdata
+    name: clean-architecture-pgdata
 
 networks:
-  destination-network:
-    name: destination-network
+  clean-architecture-network:
+    name: clean-architecture-network
     driver: bridge
