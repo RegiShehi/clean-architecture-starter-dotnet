@@ -1,0 +1,40 @@
+﻿services:
+  destination-db:
+    image: postgres:17.2
+    container_name: destination-db
+    environment:
+      - POSTGRES_DB=destination
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d destination" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - destination-network
+
+  destination-api:
+    container_name: destination-api
+    build:
+      context: .
+      dockerfile: src/Destination.Api/Dockerfile
+    depends_on:
+      destination-db:
+        condition: service_healthy
+    networks:
+      - destination-network
+
+volumes:
+  pgdata:
+    name: destination-pgdata
+
+networks:
+  destination-network:
+    name: destination-network
+    driver: bridge
